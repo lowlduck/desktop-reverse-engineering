@@ -1,0 +1,26 @@
+# Local credentials and environment
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+credentials*.json
+token.txt
+secrets/
+# Research output stays outside shared methods
+runs/
+evidence/
+logs/
+*.log
+*.pcap
+*.pcapng
+*.dmp
+# Local tooling
+node_modules/
+.venv/
+__pycache__/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
