@@ -1,94 +1,73 @@
 # Desktop Reverse Engineering Skill
 
-中文为主、保留英文技术术语的团队技能包。目标是把桌面应用的一个功能研究成**稳定、高复用、可编程的功能接口**——不限 HTTP，也覆盖 WebSocket、TCP、UDP、IPC 与客户端内部函数调用。
+把桌面应用的一个功能研究成**稳定、可复用、可编程的接口**。不限 HTTP，也覆盖 WebSocket / TCP / UDP / IPC 与客户端内部函数调用。
 
-这是按需加载的**工作方法与验证模板**，不是现成 SDK，也不自动授予工具或系统权限。
+按需加载的工作方法与验证模板，不是现成 SDK。
 
-## 核心原则
+## 实战结论（先看这 13 条，能省掉一半返工）
 
-- **先观测，后推理**：别猜参数、别猜通道；一次只改一个变量，保留空对照。
-- **受理 ≠ 完成**：HTTP 200、函数返回 true、界面上屏都只是受理，必须有第二份业务证据。
-- **先日志，后网络**：日志函数通常没有反调试保护，入参是明文（只有落盘文件才加密）。
-- **壳先分类再决定**：压缩壳/加密壳可脱；虚拟化壳不破，改边界观察或「调而不破」。
-- **T1 优先但不强求**；T2（客户端运行时直接调业务函数）通过工程验收即合格交付。
-- **维护成本必须实测**：算法稳定 ≠ T1 低维护（认证/风控常变）；内部函数布局也未必稳定。两者都按版本回归工时比较。
-- **时间盒**：单路线 45 分钟 / 3 次失败即换路线，失败连同错误码写入「已排除」。
-- 最终交付禁止 UI 自动化（含通过 CDP 派发点击或 UI 事件）。分析阶段可用 UI 建立基准。
+> 来自一次完整实战（某电商商家工作台，约 12 小时，✅ = 实跑过）。第 3 列是**别误用成什么**。
+
+| # | 结论 | 实测证据 | 别误用成 |
+|:-:|---|---|---|
+| 1 | **先找日志，再找网络** | 日志函数入参是明文（只有落盘文件才加密），一次 hook 拿到全部 URL + Body | 「日志加密了就放弃」——加密的只是文件 |
+| 2 | **CEF 系别碰系统代理** | 系统代理 / 环境变量 / 策略注册表 / hosts+自签证书 / SSLKEYLOGFILE / IFEO 六种全失败 | 「证书没装对」——整条路线排除 |
+| 3 | **虚拟化壳不要破** | `.vmp` 段 + 函数开头随机字节 + 动态工具 attach 即被踢；改边界观察 1 小时出结果 | 「必须破壳」当成唯一出路 |
+| 4 | **有完整性校验就别换文件** | 换 3 个 DLL 崩 3 次，内存 patch 长期稳定 | 「崩了 = 我代码写错」——先查校验 |
+| 5 | **虚函数用导出 hook 会 0 触发** | 导出 hook 一次没进；patch vtable 正常，只扫前 24 槽 | 「hook 不触发 = 符号找错」 |
+| 6 | **会话票据往往不落盘** | Chromium cookies 表里压根没那一行（`is_persistent=0`） | 「DPAPI 解密没写对」——数据不在那 |
+| 7 | **内存取票按命中次数排序** | 新值命中 x36，重新登录后的旧值仍 x10 | 「取第一个匹配」——会先试到过期票 |
+| 8 | **纯读内存不会导致掉线** | `ReadProcessMemory` 无回调，结构性排除 | 「可能是扫内存触发的」——别在这上面耗 |
+| 9 | **body 常有信封** | 平铺 7 种组合全报参数错，套 `{data, client}` 立刻成功 | 「字段名不对」——去读 bundle 的传输层 |
+| 10 | **错误码是坐标，不是失败信号** | A 类（参数）→ B 类（业务）说明形状已对 | 停在 A 类时去改 ID —— 顺序反了 |
+| 11 | **文本走长连接，卡片/文件走 HTTP** | 二进制字符串表里没有「按 ID 发文本」的端点，硬试 HTTP 无解 | 「同一功能同一条通道」 |
+| 12 | **UA 三件套不一致最可疑** | 用默认 `Python-urllib` UA 打接口后发生过掉线（因果未定，但嫌疑最大） | 「换个 UA 无所谓」 |
+| 13 | **URL/参数后缀要原样** | 媒体地址带 CDN 转码后缀 → 系统错；去掉即成功 | 「多一层后缀应该无所谓」 |
+
+**三条元结论**：受理 ≠ 完成（要有第二份业务证据）；一次只改一个变量；45 分钟 / 3 次失败即换路线。
 
 ## 内容结构
 
 ```text
 skills/desktop-reverse-engineering/
-├── SKILL.md                 入口：交付定义、开工顺序、症状路由、硬规则
-├── references/
-│   ├── 01-goals-evidence.md      交付等级、路线优先级、壳四分类、时间盒、证据标签
-│   ├── 02-observation-routing.md 30 分钟侦察、三层两通道、观测点性价比、通道判定
-│   ├── 03-protocol-contract.md   接口契约、各传输要点、WS 落地五步、T1 独立性试验
-│   ├── 04-internal-call-adapters.md T2：调而不破、ABI/对象/线程/版本适配
-│   ├── 05-reliability-acceptance.md 验收矩阵、重试与副作用、交付形态、清理回滚
-│   ├── 06-credentials-session.md 凭据三级判定、内存取票、生命周期、掉线归因、限速
-│   ├── 07-param-recovery.md      前端三路径、信封与枚举、错误码分层、签名策略
-│   ├── 08-context-budget.md      上下文预算、研究记录纪律、压缩后恢复
-│   └── 09-pitfalls.md            方向性/操作级陷阱、结构性排除、Windows 工具链坑
-└── templates/
-    ├── research-record.md     研究记录（含时间盒、已排除、归因表）
-    ├── interface-contract.md  接口契约
-    └── validation-matrix.md   验证矩阵
+├── SKILL.md      路由入口：交付定义 / 开工顺序 / 症状→查哪份 / 10 条硬规则
+├── references/   01 目标与路线 · 02 侦察与通道 · 03 协议契约 · 04 T2 适配
+│                 05 验收交付 · 06 凭据会话 · 07 参数还原 · 08 上下文 · 09 陷阱
+└── templates/    研究记录 · 接口契约 · 验证矩阵
 ```
 
-入口见 [SKILL.md](skills/desktop-reverse-engineering/SKILL.md)。详细文档按需读取，不必每次全量加载 —— 这也是这套结构存在的原因：完整方法论文档很长，而 AI 的上下文预算要留给真实证据。
+单次任务只读 `SKILL.md` + 2~3 个 reference，不必全量加载——这套拆分就是为省上下文。
 
-## 获取与更新
+## 用法
 
-```sh
-git clone https://github.com/lowlduck/desktop-reverse-engineering.git
-cd desktop-reverse-engineering
-# 更新前先保存本地修改
-git pull --ff-only
+```
+加载 desktop-reverse-engineering。目标 APP 装在 INSTALL_DIR，Windows，进程名 PROC，
+要复现 FEATURE，有自己的测试账号和测试对象。先做 30 分钟侦察：判通道、判壳、找日志与前端资源，
+再决定 T1 还是 T2。禁止最终用 UI 自动化。
 ```
 
-若仓库为私有，团队成员需先由所有者邀请并获得访问授权。也可在 GitHub 下载 ZIP。Git 更新的是仓库副本；若采用复制安装，还需重新同步技能目录。
+## 安装
 
-## 安装到支持文件型 Skill 的宿主
-
-完整复制 `skills/desktop-reverse-engineering` 文件夹到宿主实际扫描的技能根目录，保留 `SKILL.md`、`references`、`templates` 的相对结构。
-
-常见位置包括 `$DSH_HOME/skills`、项目 `.agents/skills` 或宿主自定义技能根，**这些位置不保证对所有平台自动生效**。先查宿主配置；例如 DSH 的 `skill-filesystem.customSkillDirs` 与 `includeDefaultRoots` 会影响发现范围。不要猜测 DSH_HOME，也不要把资料放进应用安装目录或插件的 node_modules。
+复制 `skills/desktop-reverse-engineering` 到宿主实际扫描的技能根（如 `$DSH_HOME/skills`），保留内部相对结构。
 
 ```powershell
-if (-not $env:DSH_HOME) { throw '请先确认实际 DSH_HOME' }
-$skillRoot = Join-Path $env:DSH_HOME 'skills'
-$destination = Join-Path $skillRoot 'desktop-reverse-engineering'
-if (Test-Path $destination) { throw '目标已存在，请先备份并检查差异再更新' }
-New-Item -ItemType Directory -Force $skillRoot | Out-Null
-Copy-Item './skills/desktop-reverse-engineering' $destination -Recurse
+if (-not $env:DSH_HOME) { throw '先确认 DSH_HOME' }
+$root = Join-Path $env:DSH_HOME 'skills'
+New-Item -ItemType Directory -Force $root | Out-Null
+Copy-Item './skills/desktop-reverse-engineering' $root -Recurse
 ```
 
-完成后按宿主要求刷新技能目录或开启新会话，在目录中确认名称 `desktop-reverse-engineering` 并实际加载。不要假定复制文件或 `git pull` 会让当前会话热更新。
+路径不保证自动生效，先查宿主配置（DSH 看 `skill-filesystem.customSkillDirs`）。支持自定义扫描根的宿主可直接指向本仓库 `skills/`，免复制。刷新目录或开新会话后确认能加载。
 
-## 使用
+## 维护
 
-向支持 skill 工具的助手提出：
-
-> 加载 desktop-reverse-engineering，研究 APP 的 FEATURE，最终交付稳定、可复用的功能接口。允许客户端运行，禁止最终使用 UI 自动化。先建立研究记录与可验证的成功标准。
-
-更有效的问法（给出起点，省一轮侦察）：
-
-> 加载 desktop-reverse-engineering。目标 APP 装在 `INSTALL_DIR`，平台 Windows，进程名 `PROC`。要复现 FEATURE，我已有自己的测试账号和一个测试目标对象。先做 30 分钟侦察：判通道、判壳、找日志与前端资源，再决定 T1 还是 T2。
-
-研究记录放到各自项目工作区，勿把真实证据、凭据和客户数据提交回技能仓库。模板初始状态全部为未测试。
-
-## 团队协作与检查
-
-通过分支和 PR 修改方法论。提交时写明**结论适用版本、证据范围及未验证部分**——新建议不因写入本仓库就成为已实测事实。
-
-发布前检查 Markdown 相对链接、frontmatter、占位数据、个人绝对路径、Token/私钥、日志及真实业务资料。`.gitignore` 只是减少误提交，不代替审查。工具与目标兼容性需团队在各自环境验证。
+- 提 PR 必须写**适用版本 + 证据范围 + 未验证部分**；没跑过的标 UNTESTED，不因写进仓库就算事实。
+- 研究记录放各自工作区，**不要**把真实日志、凭据、客户数据、真实端点提交回来。
+- 内部协作仓库，未指定许可证。
 
 ## 变更记录
 
 | 日期 | 变更 |
 |---|---|
 | 2026-10-16 | 初版：T0–T2 分级、证据标签、观测路由、协议契约、T2 适配、验收模板 |
-| 2026-10-20 | 同步实战：新增 06 凭据与会话（三级判定 / 内存取票 / 掉线归因）、07 参数还原（前端三路径 / 信封 / 错误码分层）、08 上下文预算、09 陷阱与工具链；01 补路线优先级与壳四分类、时间盒熔断；02 补观测点性价比与通道判定；03 补 WS 落地五步；05 补交付形态与回滚 manifest；研究记录模板补时间盒、已排除、归因表 |
-
-本仓库未指定开源许可证；当前用于获准成员的内部协作。如需公开分发，应由所有者先确定许可证与公开内容范围。
+| 2026-10-20 | 补 06 凭据会话 / 07 参数还原 / 08 上下文预算 / 09 陷阱；01–05 补路线优先级、壳四分类、时间盒熔断、通道判定、WS 五步、交付清单；SKILL.md 改为 70 行路由；README 重写为结论优先 |
