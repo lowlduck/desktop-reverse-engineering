@@ -56,6 +56,8 @@
 
 ## 10.3 Frida（把一次性发现变成可复用脚本）
 
+安装与卸载前读 [12 · 采集器生命周期](12-instrumentation-lifecycle.md)：同一目标由一个 owner 串行管理，保留 pending 操作；以 API 完成而非仅状态属性确认清理。具体 listener/onLeave 行为按已安装版本核对。
+
 - **定位用途**：`Interceptor.attach` 打点、`onEnter` 读参数、`Memory.readByteArray` 取结构体、`NativeFunction` 直接调内部函数（T2）。
 - **和调试器的分工**：调试器负责"找到"，Frida 负责"跑一万次"。
 - **坑（都真实踩过）**：

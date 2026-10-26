@@ -1,0 +1,4 @@
+interface:
+  display_name: "桌面端应用逆向"
+  short_description: "还原桌面应用调用链、加密协议与会话状态，验证独立接口、真实游标及采集器清理"
+  default_prompt: "使用 $desktop-reverse-engineering 分析目标桌面应用功能，按证据还原调用与认证链路，交付可验证接口并说明依赖、清理结果和未测范围。"
