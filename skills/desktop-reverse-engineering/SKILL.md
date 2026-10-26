@@ -30,6 +30,8 @@ T1 优先但不强求；T2 是正式交付选项，前提是契约与版本适�
 6. **固化契约** → [03-protocol-contract.md](references/03-protocol-contract.md) + [接口契约模板](templates/interface-contract.md)。
 7. **验收与交付** → [05-reliability-acceptance.md](references/05-reliability-acceptance.md) + [验证矩阵](templates/validation-matrix.md)。
 
+工具怎么挑、怎么用（调试器 / hook / 反编译器 / 抓包各自的适用面与坑）见 [10-tooling.md](references/10-tooling.md)——**工具缩短定位，不替代决策**。
+
 补充：T2 路线读 [04-internal-call-adapters.md](references/04-internal-call-adapters.md)；上下文快满或要恢复任务读 [08-context-budget.md](references/08-context-budget.md)；某条路一直不通，先读 [09-pitfalls.md](references/09-pitfalls.md)。路线取舍与优先级见 [01-goals-evidence.md](references/01-goals-evidence.md)。
 
 **完整开发指南**（长文附录，约 3100 行）：[00-development-guide.md](references/00-development-guide.md)。日常按上面的顺序读 01–09 就够；需要「两类客户端形态怎么选路」「注入后为什么请求没发出去」「错误码怎么分层读」这类整篇判断时再读它。正文不绑定任何产品，产品名只在它的附录 D。
@@ -48,6 +50,9 @@ T1 优先但不强求；T2 是正式交付选项，前提是契约与版本适�
 | 上下文被压缩、忘了试过什么 | 08 |
 | 不知道哪条路线该先试 | 01 §路线优先级、09 §陷阱 |
 | 有壳 / 有签名校验 / 有反调试 | 01 §壳四分类、09 |
+| 手上有一堆工具，不知道这会儿该开哪个 | 10 §选型矩阵 |
+| 用调试器断点老是命不中 / 一 attach 就卡死 | 10 §动态调试器 |
+| hook 脚本在调试器里能跑、独立跑就失败 | 10 §常见坑、08 |
 | 注入了，但服务端说参数非法 | 00 §16.1（先回读注入点）、09 |
 | 注入了，但请求根本没发出去 | 00 §16.2（载体命令 / 长度指纹核对） |
 
